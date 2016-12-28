@@ -9,4 +9,4 @@ Set of commands to clean up package, library, and cache files that tend to grow 
 **To-Do:**
 
 - Incorporate progress bar
-- Show 
+- Do the math to show space freed
