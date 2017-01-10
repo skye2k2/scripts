@@ -29,8 +29,9 @@ find . -name "node_modules" -exec rm -rf '{}' +
 find . -name "bower_components" -exec rm -rf '{}' +
 
 # Clear application-specific caches (exclude apple- and browser-specific caches)
-find ~/Library/Caches/* -maxdepth 1 -not -path "*/com.*" -not -path "*/Google*" -type d -exec rm -rf '{}' +
-sudo find /Library/Caches/* -maxdepth 1 -not -path "*/com.*" -not -path "*Metadata*" -not -path "*/Google*" -type d  -exec rm -rf '{}' +
+# NOTE: Disabled application cache clearing, due to inadvertently destroying SourceTree's ability to catch new changes
+# find ~/Library/Caches/* -maxdepth 1 -not -path "*/com.*" -not -path "*/Google*" -type d -exec rm -rf '{}' +
+# sudo find /Library/Caches/* -maxdepth 1 -not -path "*/com.*" -not -path "*Metadata*" -not -path "*/Google*" -type d  -exec rm -rf '{}' +
 
 # Remove cached packages from common package managers
 npm cache clean
