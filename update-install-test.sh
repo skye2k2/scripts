@@ -10,12 +10,13 @@
 # --------------------------------------------------------------------------------
 
 # Source of parameter-handling code: http://www.freebsd.org/cgi/man.cgi?query=getopt
-args=`getopt dfht $*`
+args=`getopt dfght $*`
 
 if [ $? -ne 0 ]; then
   echo -e "options:
   -d: dry-run: just return what directories *would* have been updated. Supercedes all other flags
   -f: full: remove node_modules, npm link, cake env:setup
+  -g: git-fame: generate git-fame report (depends on https://github.com/oleander/git-fame-rb)
   -h: show this help menu
   -t: test: run unit tests and open results"
   exit 2
@@ -26,7 +27,7 @@ set -- $args
 while true; do
   case "$1" in
     # TODO: Make specific cases to set boolean flags for each option
-    -d|-f|-t)
+    -d|-f|-g|-t)
       sflags="${1#-}$sflags"
       shift
     ;;
@@ -34,6 +35,7 @@ while true; do
       echo -e "options:
       -d: dry-run: just return what directories *would* have been updated. Supercedes all other flags
       -f: full: remove node_modules/bower_components, npm link, cake env:setup
+      -g: git-fame: generate git-fame report (depends on https://github.com/oleander/git-fame-rb)
       -t: test: run unit tests and open results"
       exit 2
     ;;
@@ -49,6 +51,11 @@ DIRECTORY_PATH="${PWD}"
 # @param string $1 - Path to Git command logfile. Will contain any errors Git encountered
 # @param string $2 - Path to repository. Used to check for existance of files that determine how assets are installed and tested
 function runCommands {
+  # If git-fame flag (-g) enabled, run git fame (https://github.com/oleander/git-fame-rb) and save report to /reports/git-fame.csv
+  if [[ $sflags == *["g"]* ]]; then
+    "mkdir reports" > /dev/null 2>&1; touch reports/git-fame.csv; git fame --sort=loc --whitespace --everything --timeout=-1 --exclude=node_modules/*,components/*,bower_components/*,reports/*,temp/*,build/*,dist/*,vendor/*,*/vendor/* --hide-progressbar --format=csv > reports/git-fame.csv
+  fi
+
   # If full flag (-f) enabled, do a clean install (link, so that local linking will work without needing to re-install)
   if [[ $sflags == *["f"]* ]]; then
 
