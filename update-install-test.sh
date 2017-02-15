@@ -177,12 +177,13 @@ done
 if [[ $sflags == *["g"]* ]]; then
   # Reverse-sort contributors by LOC and save to file
   for key in "${!STATS_LOC[@]}"; do
-    printf '%s,%s\n' "${key/_/ }" "${STATS_LOC[$key]}"
-  done | sort -t , -k 2nr > "${DIRECTORY_PATH}/git-fame.csv"
+    printf '%s, %s, %s\n' "${key/_/ }" "${STATS_LOC[$key]}" "${STATS_COMMITS[$key]}"
+  done | sort -t , -k 2nr > "${DIRECTORY_PATH}/git-combined-fame.csv"
+  echo -e "Contributor,LOC,Commits\n$(cat "${DIRECTORY_PATH}/git-combined-fame.csv")" > "${DIRECTORY_PATH}/git-combined-fame.csv"
 
   echo -e "\nGIT FAME SUMMARY:\n"
 
-  cat "${DIRECTORY_PATH}/git-fame.csv"
+  cat "${DIRECTORY_PATH}/git-combined-fame.csv"
 fi
 
 say "Job done--MAHSTER!"
