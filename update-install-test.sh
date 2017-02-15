@@ -1,5 +1,6 @@
-#! /bin/bash
+#!/usr/bin/env bash
 ## -eux
+set -o pipefail
 
 # --------------------------------------------------------------------------------
 # Script: update-install-test.sh
@@ -10,7 +11,7 @@
 # --------------------------------------------------------------------------------
 
 # Source of parameter-handling code: http://www.freebsd.org/cgi/man.cgi?query=getopt
-args=`getopt dfght $*`
+args=`getopt dfghtu $*`
 
 if [ $? -ne 0 ]; then
   echo -e "options:
@@ -18,7 +19,8 @@ if [ $? -ne 0 ]; then
   -f: full: remove node_modules, npm link, cake env:setup
   -g: git-fame: generate git-fame report (depends on https://github.com/oleander/git-fame-rb)
   -h: show this help menu
-  -t: test: run unit tests and open results"
+  -t: test: run unit tests and open results
+  -u: update: update git repository"
   exit 2
 fi
 
@@ -27,7 +29,7 @@ set -- $args
 while true; do
   case "$1" in
     # TODO: Make specific cases to set boolean flags for each option
-    -d|-f|-g|-t)
+    -d|-f|-g|-t|-u)
       sflags="${1#-}$sflags"
       shift
     ;;
@@ -36,7 +38,8 @@ while true; do
       -d: dry-run: just return what directories *would* have been updated. Supercedes all other flags
       -f: full: remove node_modules/bower_components, npm link, cake env:setup
       -g: git-fame: generate git-fame report (depends on https://github.com/oleander/git-fame-rb)
-      -t: test: run unit tests and open results"
+      -t: test: run unit tests and open results
+      -u: update: update git repository"
       exit 2
     ;;
     --)
@@ -47,13 +50,30 @@ done
 
 DIRECTORY_PATH="${PWD}"
 
+declare -A STATS_LOC
+declare -A STATS_COMMITS
+
 # function runCommands determines which commands to run, based on passed-in arguments, presence of specific files, and previous Git command results
 # @param string $1 - Path to Git command logfile. Will contain any errors Git encountered
 # @param string $2 - Path to repository. Used to check for existance of files that determine how assets are installed and tested
 function runCommands {
   # If git-fame flag (-g) enabled, run git fame (https://github.com/oleander/git-fame-rb) and save report to /reports/git-fame.csv
+  # Piping through sed is to remove any quotes and thousands commas reulting from pretty printing (see: https://github.com/oleander/git-fame-rb/issues/76)
   if [[ $sflags == *["g"]* ]]; then
-    "mkdir reports" > /dev/null 2>&1; touch reports/git-fame.csv; git fame --sort=loc --whitespace --everything --timeout=-1 --exclude=node_modules/*,components/*,bower_components/*,reports/*,temp/*,build/*,dist/*,vendor/*,*/vendor/* --hide-progressbar --format=csv > reports/git-fame.csv
+    "mkdir reports" > /dev/null 2>&1; touch reports/git-fame.csv; git fame --sort=loc --whitespace --everything --timeout=-1 --exclude=node_modules/*,components/*,bower_components/*,reports/*,temp/*,build/*,dist/*,vendor/*,*/vendor/* --hide-progressbar --format=csv | sed 's/\(\"\)\(.*\)\(,\)\(.*\)\(\"\)/\2\4/' > reports/git-fame.csv
+
+    # NOTE: Requires bash 4+ (brew install bash; chsh -s /usr/local/bin/bash $USER)
+
+    # TODO: Sum stats for users across all repositories
+    while IFS=, read NAME LOC COMMITS FILES DISTRIBUTION
+    do
+      # Skip the first row of results (table header)
+      # If LOC > 0, add contributor to results file
+      if [[ ! $NAME == "name" && $LOC > 0 ]]; then
+        STATS_LOC["${NAME/ /_}"]="$(("${STATS_LOC["${NAME/ /_}"]}" + $LOC))"
+        STATS_COMMITS["${NAME/ /_}"]="$(("${STATS_COMMITS["${NAME/ /_}"]}" + $COMMITS))"
+      fi
+    done < reports/git-fame.csv
   fi
 
   # If full flag (-f) enabled, do a clean install (link, so that local linking will work without needing to re-install)
@@ -121,8 +141,10 @@ for REPO_PATH in "${REPOSITORIES[@]}" ; do
       continue
     fi
 
-    echo -e "Updating $REPO_NAME"
     cd $REPO_PATH
+
+    if [[ $sflags == *["u"]* ]]; then
+      echo -e "Updating $REPO_NAME"
     LOGFILE="${DIRECTORY_PATH}/.${REPO_NAME}.results.txt"
 
     # Update repository, stashing if needed
@@ -145,8 +167,23 @@ for REPO_PATH in "${REPOSITORIES[@]}" ; do
       echo -e "...${REPO_NAME} repository up-to-date."
       runCommands $LOGFILE $REPO_PATH
     fi
+    else
+      echo -e "Processing $REPO_NAME"
+      runCommands $LOGFILE $REPO_PATH
+    fi
   fi
 done
+
+if [[ $sflags == *["g"]* ]]; then
+  # Reverse-sort contributors by LOC and save to file
+  for key in "${!STATS_LOC[@]}"; do
+    printf '%s,%s\n' "${key/_/ }" "${STATS_LOC[$key]}"
+  done | sort -t , -k 2nr > "${DIRECTORY_PATH}/git-fame.csv"
+
+  echo -e "\nGIT FAME SUMMARY:\n"
+
+  cat "${DIRECTORY_PATH}/git-fame.csv"
+fi
 
 say "Job done--MAHSTER!"
 
