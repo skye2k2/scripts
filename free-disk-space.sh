@@ -7,7 +7,7 @@ set -o pipefail
 # Author: Clif Bergmann (skye2k2)
 # Date: Dec 2016
 # Purpose: Especially as a developer, package, library, and cache files will occasionally take up large amounts of disk space, slowing down searching and backups. The following is a set of scripts that I run to tidy up.
-# Use: Download and set the execute bit `chmod +x update-install-test.sh`, then run `./free-disk-space.sh`.
+# Use: Download and set the execute bit `chmod +x free-disk-space.sh`, then run `./free-disk-space.sh`.
 # Note: Requires sudo permissions for some commands, and can run for several minutes. Can be run from any location.
 # --------------------------------------------------------------------------------
 

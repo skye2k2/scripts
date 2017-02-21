@@ -3,11 +3,11 @@
 set -o pipefail
 
 # --------------------------------------------------------------------------------
-# Script: update-install-test.sh
+# Script: gitmanage.sh
 # Author: Clif Bergmann (skye2k2)
 # Date: Dec 2016
 # Purpose: Update a specific set of repositories, and optionally npm/bower install, run tests, and open results on each.
-# Use: Download and place/link in your least common directory under which you wish GitHub repositories to be updated, set the execute bit `chmod +x update-install-test.sh`, modify the REPOSITORIES find parameters then run `./update-install-test.sh`.
+# Use: Download and place/link in your least common directory under which you wish GitHub repositories to be updated, set the execute bit `chmod +x gitmanage.sh`, modify the REPOSITORIES find parameters then run `./gitmanage.sh` with the parameters you choose.
 # --------------------------------------------------------------------------------
 
 # Source of parameter-handling code: http://www.freebsd.org/cgi/man.cgi?query=getopt
@@ -88,6 +88,7 @@ function runCommands {
 
     if [ -s "${2}/bower.json" ]; then
       rm -rf "${2}/bower_components"
+      rm -rf "${2}/components"
       # HANDLE FORCE CORRECTLY, SO THAT NO USER INPUT IS REQUIRED--LAST RUN ON FS-COMPONENTS FORCED THE USER TO SELECT AN OPTION, AND BECAUSE OF THE SILENT FLAG, DIDN'T EVEN SHOW WHAT YOU WERE CHOOSING BETWEEN OR WHY
       bower install -sf
       bower link
@@ -122,10 +123,11 @@ function runCommands {
 
 # http://stackoverflow.com/questions/8213328/bash-script-find-output-to-array
 # Insert your own repository sub-folders into the multi-find statement below; ex: find $DIRECTORY_PATH/fs-components $DIRECTORY_PATH/downstream
+# Modify the max- and min-depth as desired; mindepth 0 will include the directory passed in as a potential repo; maxdepth 2 will search two directories deep for potential repos
 REPOSITORIES=()
 while IFS= read -d $'\0' -r REPO_PATH; do
    REPOSITORIES=("${REPOSITORIES[@]}" "$REPO_PATH")
-done < <(find $DIRECTORY_PATH/fs-components $DIRECTORY_PATH/downstream $DIRECTORY_PATH/v8 -type d -maxdepth 1 -mindepth 1 -print0)
+done < <(find $DIRECTORY_PATH -type d -maxdepth 1 -mindepth 0 -print0)
 
 for i in "${!REPOSITORIES[@]}"; do
 # Make sure a directory is a GitHub directory before updating
@@ -173,6 +175,9 @@ for REPO_PATH in "${REPOSITORIES[@]}"; do
       fi
     else
       echo -e "...${REPO_NAME} repository up-to-date."
+      # DETERMINE HOW IN THE HECK TO USE .netrc CORRECTLY TO ACCESS THE GITHUB API FOR EACH DEPENDENCY TO COMPARE THE MOST RECENT RELEASE FOR THE CURRENT REPO WITH THE CURRENT PINNED VERSION AND THEN UPDATE
+      # POTENTIALLY CHECK TO SEE IF THE NEW TAG IS A NUMBER OF POSITIVE COMMITS AHEAD OF THE CURRENT PIN
+      # curl -netrc-file ~/.netrc https://api.github.com/repos/fs-webdev/fs-cache/tags
       runCommands $LOGFILE $REPO_PATH
     fi
   else
@@ -182,7 +187,7 @@ for REPO_PATH in "${REPOSITORIES[@]}"; do
 done
 
 if [[ $sflags == *["g"]* ]]; then
-  # Reverse-sort contributors by LOC and save to file
+  # Reverse-sort contributors by LOC and save to single file
   for key in "${!STATS_LOC[@]}"; do
     printf '%s, %s, %s\n' "${key/_/ }" "${STATS_LOC[$key]}" "${STATS_COMMITS[$key]}"
   done | sort -t , -k 2nr > "${DIRECTORY_PATH}/git-combined-fame.csv"
