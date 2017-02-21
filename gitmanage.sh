@@ -131,7 +131,7 @@ function runCommands {
 
   # remove log file if Git commands successful (empty)
   if [ ! -s "$1" ]; then
-    if [ -f "$1" ]
+    if [ -f "$1" ]; then
       rm "$1"
     fi
   else
