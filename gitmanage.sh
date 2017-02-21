@@ -11,11 +11,12 @@ set -o pipefail
 # --------------------------------------------------------------------------------
 
 # Source of parameter-handling code: http://www.freebsd.org/cgi/man.cgi?query=getopt
-args=`getopt dfghtu $*`
+args=`getopt cdfghtu $*`
 
 if [ $? -ne 0 ]; then
   echo -e "options:
-  -d: dry-run: just return what directories *would* have been updated. Supercedes all other flags
+  -c: check: just return what directories *would* have been updated. Supercedes all other flags
+  -d: dependencies: update the package dependencies
   -f: full: remove node_modules, npm link, cake env:setup
   -g: git-fame: generate git-fame report (depends on https://github.com/oleander/git-fame-rb)
   -h: show this help menu
@@ -29,13 +30,14 @@ set -- $args
 while true; do
   case "$1" in
     # TODO: Make specific cases to set boolean flags for each option
-    -d|-f|-g|-t|-u)
+    -c|-d|-f|-g|-t|-u)
       sflags="${1#-}$sflags"
       shift
     ;;
     -h)
       echo -e "options:
-      -d: dry-run: just return what directories *would* have been updated. Supercedes all other flags
+      -c: check: just return what directories *would* have been updated. Supercedes all other flags
+      -d: dependencies: update the package dependencies
       -f: full: remove node_modules/bower_components, npm link, cake env:setup
       -g: git-fame: generate git-fame report (depends on https://github.com/oleander/git-fame-rb)
       -t: test: run unit tests and open results
@@ -78,9 +80,21 @@ function runCommands {
     done < reports/git-fame.csv
   fi
 
+  # If dependencies flag (-d) enabled, update dependencies)
+  if [[ $sflags == *["d"]* ]]; then
+    if [ -s "${2}/package.json" ]; then
+      echo "should update npm dependencies"
+      # npm update --save
+    fi
+
+    if [ -s "${2}/bower.json" ]; then
+      echo "should update bower dependencies"
+      # bower -q  update -FSD
+    fi
+  fi
+
   # If full flag (-f) enabled, do a clean install (link, so that local linking will work without needing to re-install)
   if [[ $sflags == *["f"]* ]]; then
-
     if [ -s "${2}/package.json" ]; then
       rm -rf "${2}/node_modules"
       npm link -q
@@ -89,8 +103,8 @@ function runCommands {
     if [ -s "${2}/bower.json" ]; then
       rm -rf "${2}/bower_components"
       rm -rf "${2}/components"
-      # HANDLE FORCE CORRECTLY, SO THAT NO USER INPUT IS REQUIRED--LAST RUN ON FS-COMPONENTS FORCED THE USER TO SELECT AN OPTION, AND BECAUSE OF THE SILENT FLAG, DIDN'T EVEN SHOW WHAT YOU WERE CHOOSING BETWEEN OR WHY
-      bower install -sf
+
+      bower install -sF
       bower link
     fi
 
@@ -117,7 +131,11 @@ function runCommands {
 
   # remove log file if Git commands successful (empty)
   if [ ! -s "$1" ]; then
-    rm "$1"
+    if [ -f "$1" ]
+      rm "$1"
+    fi
+  else
+    echo -e "Command error. Check $1 for additional detail"
   fi
 }
 
@@ -145,17 +163,17 @@ fi
 for REPO_PATH in "${REPOSITORIES[@]}"; do
   REPO_NAME="${REPO_PATH##*/}"
 
-  # If dry-run flag (-d) enabled, just print out the GitHub repositories that *would* have been updated
-  if [[ $sflags == *["d"]* ]]; then
+  # If check flag (-c) enabled, just print out the GitHub repositories that *would* have been updated
+  if [[ $sflags == *["c"]* ]]; then
     echo -e "$REPO_NAME"
     continue
   fi
 
   cd $REPO_PATH
+  LOGFILE="${DIRECTORY_PATH}/.${REPO_NAME}.results.txt"
 
   if [[ $sflags == *["u"]* ]]; then
     echo -e "Updating $REPO_NAME"
-    LOGFILE="${DIRECTORY_PATH}/.${REPO_NAME}.results.txt"
 
     # Update repository, stashing if needed
     (git prune 2>&1) | tee ${LOGFILE}
