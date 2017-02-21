@@ -58,6 +58,7 @@ declare -A STATS_COMMITS
 # @param string $2 - Path to repository. Used to check for existance of files that determine how assets are installed and tested
 function runCommands {
   # If git-fame flag (-g) enabled, run git fame (https://github.com/oleander/git-fame-rb) and save report to /reports/git-fame.csv
+  # NOTE: git fame is not multi-threaded (see: https://github.com/oleander/git-fame-rb/issues/75), so running against repositories with over 300 files to parse will take a while
   # Piping through sed is to remove any quotes and thousands commas reulting from pretty printing (see: https://github.com/oleander/git-fame-rb/issues/76)
   if [[ $sflags == *["g"]* ]]; then
     "mkdir reports" > /dev/null 2>&1; touch reports/git-fame.csv; git fame --sort=loc --whitespace --everything --timeout=-1 --exclude=node_modules/*,components/*,bower_components/*,reports/*,temp/*,build/*,dist/*,vendor/*,*/vendor/* --hide-progressbar --format=csv | sed 's/\(\"\)\(.*\)\(,\)\(.*\)\(\"\)/\2\4/' > reports/git-fame.csv
@@ -70,6 +71,7 @@ function runCommands {
       # Skip the first row of results (table header)
       # If LOC > 0, add contributor to results file
       if [[ ! $NAME == "name" && $LOC > 0 ]]; then
+        # BUG: If a user is responsible for more than 1,000 commits or 1,000,000 lines of code, the regex to strip out commas fails, causing an invalid arithmetic operation
         STATS_LOC["${NAME/ /_}"]="$(("${STATS_LOC["${NAME/ /_}"]}" + $LOC))"
         STATS_COMMITS["${NAME/ /_}"]="$(("${STATS_COMMITS["${NAME/ /_}"]}" + $COMMITS))"
       fi
@@ -86,6 +88,7 @@ function runCommands {
 
     if [ -s "${2}/bower.json" ]; then
       rm -rf "${2}/bower_components"
+      # HANDLE FORCE CORRECTLY, SO THAT NO USER INPUT IS REQUIRED--LAST RUN ON FS-COMPONENTS FORCED THE USER TO SELECT AN OPTION, AND BECAUSE OF THE SILENT FLAG, DIDN'T EVEN SHOW WHAT YOU WERE CHOOSING BETWEEN OR WHY
       bower install -sf
       bower link
     fi
@@ -120,31 +123,36 @@ function runCommands {
 # http://stackoverflow.com/questions/8213328/bash-script-find-output-to-array
 # Insert your own repository sub-folders into the multi-find statement below; ex: find $DIRECTORY_PATH/fs-components $DIRECTORY_PATH/downstream
 REPOSITORIES=()
-while IFS= read -d $'\0' -r REPO_PATH ; do
+while IFS= read -d $'\0' -r REPO_PATH; do
    REPOSITORIES=("${REPOSITORIES[@]}" "$REPO_PATH")
-done < <(find $DIRECTORY_PATH/downstream -type d -maxdepth 1 -mindepth 1 -print0)
+done < <(find $DIRECTORY_PATH/fs-components $DIRECTORY_PATH/downstream $DIRECTORY_PATH/v8 -type d -maxdepth 1 -mindepth 1 -print0)
+
+for i in "${!REPOSITORIES[@]}"; do
+# Make sure a directory is a GitHub directory before updating
+  GIT_FOLDER="$(find ${REPOSITORIES[$i]}/.git -type d -maxdepth 0 2> /dev/null)"
+  if [ -z "$GIT_FOLDER" ]; then
+    unset REPOSITORIES[$i]
+  fi
+done
 
 if [ "${#REPOSITORIES[@]}" -gt 1 ]; then
   echo -e "${#REPOSITORIES[@]} repositories:\n"
 fi
 
-# For each repository, update master and run additional selected commands
-for REPO_PATH in "${REPOSITORIES[@]}" ; do
+# For each repository, run additional selected commands
+for REPO_PATH in "${REPOSITORIES[@]}"; do
   REPO_NAME="${REPO_PATH##*/}"
 
-  # Make sure a directory is a GitHub directory before updating
-  GIT_FOLDER="$(find ${REPO_PATH}/.git -type d -maxdepth 0)"
-  if [ ! -z "$GIT_FOLDER" ]; then
-    # If dry-run flag (-d) enabled, just print out the GitHub repositories that *would* have been updated
-    if [[ $sflags == *["d"]* ]]; then
-      echo -e "$REPO_NAME"
-      continue
-    fi
+  # If dry-run flag (-d) enabled, just print out the GitHub repositories that *would* have been updated
+  if [[ $sflags == *["d"]* ]]; then
+    echo -e "$REPO_NAME"
+    continue
+  fi
 
-    cd $REPO_PATH
+  cd $REPO_PATH
 
-    if [[ $sflags == *["u"]* ]]; then
-      echo -e "Updating $REPO_NAME"
+  if [[ $sflags == *["u"]* ]]; then
+    echo -e "Updating $REPO_NAME"
     LOGFILE="${DIRECTORY_PATH}/.${REPO_NAME}.results.txt"
 
     # Update repository, stashing if needed
@@ -167,10 +175,9 @@ for REPO_PATH in "${REPOSITORIES[@]}" ; do
       echo -e "...${REPO_NAME} repository up-to-date."
       runCommands $LOGFILE $REPO_PATH
     fi
-    else
-      echo -e "Processing $REPO_NAME"
-      runCommands $LOGFILE $REPO_PATH
-    fi
+  else
+    echo -e "Processing $REPO_NAME"
+    runCommands $LOGFILE $REPO_PATH
   fi
 done
 
