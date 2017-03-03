@@ -11,7 +11,7 @@ set -o pipefail
 # --------------------------------------------------------------------------------
 
 # Source of parameter-handling code: http://www.freebsd.org/cgi/man.cgi?query=getopt
-args=`getopt cdfghtu $*`
+args=`getopt cdfghstu $*`
 
 if [ $? -ne 0 ]; then
   echo -e "options:
@@ -20,7 +20,8 @@ if [ $? -ne 0 ]; then
   -f: full: remove node_modules, npm link, cake env:setup
   -g: git-fame: generate git-fame report (depends on https://github.com/oleander/git-fame-rb)
   -h: show this help menu
-  -t: test: run unit tests and open results
+  -s: size: calculate npm- and bower-installed repository size
+  -t: test: run unit tests and open results (stored in /reports)
   -u: update: update git repository"
   exit 2
 fi
@@ -30,7 +31,7 @@ set -- $args
 while true; do
   case "$1" in
     # TODO: Make specific cases to set boolean flags for each option
-    -c|-d|-f|-g|-t|-u)
+    -c|-d|-f|-g|-s|-t|-u)
       sflags="${1#-}$sflags"
       shift
     ;;
@@ -40,7 +41,8 @@ while true; do
       -d: dependencies: update the package dependencies
       -f: full: remove node_modules/bower_components, npm link, cake env:setup
       -g: git-fame: generate git-fame report (depends on https://github.com/oleander/git-fame-rb)
-      -t: test: run unit tests and open results
+      -s: size: calculate npm- and bower-installed repository size
+      -t: test: run unit tests and open results (stored in /reports)
       -u: update: update git repository"
       exit 2
     ;;
@@ -54,6 +56,9 @@ DIRECTORY_PATH="${PWD}"
 
 declare -A STATS_LOC
 declare -A STATS_COMMITS
+TOTAL_FILE_COUNT=0
+TOTAL_DIRECTORY_SIZE=0
+TOTAL_DIRECTORY_SIZE_UNITS="M"
 
 # function runCommands determines which commands to run, based on passed-in arguments, presence of specific files, and previous Git command results
 # @param string $1 - Path to Git command logfile. Will contain any errors Git encountered
@@ -63,11 +68,11 @@ function runCommands {
   # NOTE: git fame is not multi-threaded (see: https://github.com/oleander/git-fame-rb/issues/75), so running against repositories with over 300 files to parse will take a while
   # Piping through sed is to remove any quotes and thousands commas reulting from pretty printing (see: https://github.com/oleander/git-fame-rb/issues/76)
   if [[ $sflags == *["g"]* ]]; then
-    "mkdir reports" > /dev/null 2>&1; touch reports/git-fame.csv; git fame --sort=loc --whitespace --everything --timeout=-1 --exclude=node_modules/*,components/*,bower_components/*,reports/*,temp/*,build/*,dist/*,vendor/*,*/vendor/* --hide-progressbar --format=csv | sed 's/\(\"\)\(.*\)\(,\)\(.*\)\(\"\)/\2\4/' > reports/git-fame.csv
+    mkdir reports > /dev/null 2>&1; touch reports/git-fame.csv; git fame --sort=loc --whitespace --everything --timeout=-1 --exclude=node_modules/*,components/*,bower_components/*,reports/*,temp/*,build/*,dist/*,vendor/*,*/vendor/* --hide-progressbar --format=csv | sed 's/\(\"\)\(.*\)\(,\)\(.*\)\(\"\)/\2\4/' > reports/git-fame.csv
 
     # NOTE: Requires bash 4+ (brew install bash; chsh -s /usr/local/bin/bash $USER)
 
-    # TODO: Sum stats for users across all repositories
+    # Read in contributor stats
     while IFS=, read NAME LOC COMMITS FILES DISTRIBUTION
     do
       # Skip the first row of results (table header)
@@ -113,6 +118,38 @@ function runCommands {
     fi
   fi
 
+  # If size flag (-s) enabled, calculate the directory size and number of files
+  if [[ $sflags == *["s"]* ]]; then
+    # TODO: PROBABLY SHOULD EXCLUDE THE .git DIRECTORY
+    DIRECTORY_SIZE="`du -sh`" # $PWD
+    DIRECTORY_SIZE="$(echo ${DIRECTORY_SIZE%?.*} | tr -d '[:space:]')" # remove whitespace and trailing dot
+
+    FILE_COUNT="`find $PWD -print | wc -l | tr -d '[:space:]'`" # remove whitespace
+
+    echo "$DIRECTORY_SIZE, $FILE_COUNT files"
+
+    DIRECTORY_SIZE_UNITS="${DIRECTORY_SIZE: -1}" # grab size unit for comparison
+
+    mkdir reports > /dev/null 2>&1; touch reports/disk-usage.csv; printf '%s, %s\n' "file count" "directory size" > "reports/disk-usage.csv"; printf '%s, %s\n' "$FILE_COUNT" "$DIRECTORY_SIZE" >> "reports/disk-usage.csv"
+
+    DIRECTORY_SIZE="${DIRECTORY_SIZE%?}"
+
+    case "$DIRECTORY_SIZE_UNITS" in
+    'K')
+    DIRECTORY_SIZE="$(echo "scale=4;$DIRECTORY_SIZE / 1024" | bc -l)"
+    ;;
+    'G')
+    # CASES SEEM TO BE GOOD, BUT MULTIPLICATION IS FAILING
+    DIRECTORY_SIZE="$(echo "scale=4;1024 / $DIRECTORY_SIZE" | bc -l)"
+    ;;
+    esac
+
+    # TODO: STORE THE VARIOUS SIZES, UNITS, AND, COUNTS TO ARRAYS, SO THAT THE SUMMARY CAN SHOW RESULTS FOR ALL REPOS IN THE REPORT
+
+    TOTAL_DIRECTORY_SIZE="$(echo "$TOTAL_DIRECTORY_SIZE + $DIRECTORY_SIZE" | bc -l)"
+    TOTAL_FILE_COUNT="$(echo "$TOTAL_FILE_COUNT + $FILE_COUNT" | bc -l)"
+  fi
+
   # If test flag (-t) enabled, run unit tests and open coverage results
   if [[ $sflags == *["t"]* ]]; then
 
@@ -141,11 +178,11 @@ function runCommands {
 
 # http://stackoverflow.com/questions/8213328/bash-script-find-output-to-array
 # Insert your own repository sub-folders into the multi-find statement below; ex: find $DIRECTORY_PATH/fs-components $DIRECTORY_PATH/downstream
-# Modify the max- and min-depth as desired; mindepth 0 will include the directory passed in as a potential repo; maxdepth 2 will search two directories deep for potential repos
+# Modify the max- and min-depth as desired; mindepth 0 includes the passed-in directory as a potential repo; maxdepth 2 will search two directories deep for potential repos
 REPOSITORIES=()
 while IFS= read -d $'\0' -r REPO_PATH; do
    REPOSITORIES=("${REPOSITORIES[@]}" "$REPO_PATH")
-done < <(find $DIRECTORY_PATH -type d -maxdepth 1 -mindepth 0 -print0)
+done < <(find $DIRECTORY_PATH/downstream/ -type d -maxdepth 1 -mindepth 0 -print0)
 
 for i in "${!REPOSITORIES[@]}"; do
 # Make sure a directory is a GitHub directory before updating
@@ -204,18 +241,27 @@ for REPO_PATH in "${REPOSITORIES[@]}"; do
   fi
 done
 
+if [[ $sflags == *["s"]* ]]; then
+  echo -e "\nFILESYSTEM SUMMARY:\n"
+
+  echo -e "$TOTAL_DIRECTORY_SIZE$TOTAL_DIRECTORY_SIZE_UNITS, $TOTAL_FILE_COUNT files"
+
+  # TODO: Save combined results to .csv file
+  touch "${DIRECTORY_PATH}/combined-disk-usage.csv"; printf '%s, %s\n' "total file count" "total size" > "${DIRECTORY_PATH}/combined-disk-usage.csv"; printf '%s, %s\n' "$TOTAL_FILE_COUNT" "$TOTAL_DIRECTORY_SIZE$TOTAL_DIRECTORY_SIZE_UNITS" >> "${DIRECTORY_PATH}/combined-disk-usage.csv"
+fi
+
 if [[ $sflags == *["g"]* ]]; then
   # Reverse-sort contributors by LOC and save to single file
   for key in "${!STATS_LOC[@]}"; do
     printf '%s, %s, %s\n' "${key/_/ }" "${STATS_LOC[$key]}" "${STATS_COMMITS[$key]}"
-  done | sort -t , -k 2nr > "${DIRECTORY_PATH}/git-combined-fame.csv"
-  echo -e "Contributor,LOC,Commits\n$(cat "${DIRECTORY_PATH}/git-combined-fame.csv")" > "${DIRECTORY_PATH}/git-combined-fame.csv"
+  done | sort -t , -k 2nr > "${DIRECTORY_PATH}/combined-git-fame.csv"
+  echo -e "Contributor,LOC,Commits\n$(cat "${DIRECTORY_PATH}/combined-git-fame.csv")" > "${DIRECTORY_PATH}/combined-git-fame.csv"
 
   echo -e "\nGIT FAME SUMMARY:\n"
 
-  cat "${DIRECTORY_PATH}/git-combined-fame.csv"
+  cat "${DIRECTORY_PATH}/combined-git-fame.csv"
 fi
 
-say "Job done--MAHSTER!"
+say "Job done!" &
 
 #bash
