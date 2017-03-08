@@ -58,7 +58,7 @@ declare -A STATS_LOC
 declare -A STATS_COMMITS
 TOTAL_FILE_COUNT=0
 TOTAL_DIRECTORY_SIZE=0
-TOTAL_DIRECTORY_SIZE_UNITS="M"
+TOTAL_DIRECTORY_SIZE_UNITS="MB"
 
 # function runCommands determines which commands to run, based on passed-in arguments, presence of specific files, and previous Git command results
 # @param string $1 - Path to Git command logfile. Will contain any errors Git encountered
@@ -109,7 +109,7 @@ function runCommands {
       rm -rf "${2}/bower_components"
       rm -rf "${2}/components"
 
-      bower install -sF
+      bower install --quiet --force-latest
       bower link
     fi
 
@@ -126,20 +126,19 @@ function runCommands {
 
     FILE_COUNT="`find $PWD -print | wc -l | tr -d '[:space:]'`" # remove whitespace
 
-    echo "$DIRECTORY_SIZE, $FILE_COUNT files"
+    echo -e " $DIRECTORY_SIZE, $FILE_COUNT files"
 
-    DIRECTORY_SIZE_UNITS="${DIRECTORY_SIZE: -1}" # grab size unit for comparison
+    DIRECTORY_SIZE_UNITS="${DIRECTORY_SIZE: -1}B" # grab size unit for comparison
 
     mkdir reports > /dev/null 2>&1; touch reports/disk-usage.csv; printf '%s, %s\n' "file count" "directory size" > "reports/disk-usage.csv"; printf '%s, %s\n' "$FILE_COUNT" "$DIRECTORY_SIZE" >> "reports/disk-usage.csv"
 
     DIRECTORY_SIZE="${DIRECTORY_SIZE%?}"
 
     case "$DIRECTORY_SIZE_UNITS" in
-    'K')
+    'KB')
     DIRECTORY_SIZE="$(echo "scale=4;$DIRECTORY_SIZE / 1024" | bc -l)"
     ;;
-    'G')
-    # CASES SEEM TO BE GOOD, BUT MULTIPLICATION IS FAILING
+    'GB')
     DIRECTORY_SIZE="$(echo "scale=4;1024 / $DIRECTORY_SIZE" | bc -l)"
     ;;
     esac
@@ -244,10 +243,25 @@ done
 if [[ $sflags == *["s"]* ]]; then
   echo -e "\nFILESYSTEM SUMMARY:\n"
 
+  # Upconvert units, if greater than 1024 in the current size unit
+  if [ $(bc -l <<< "$TOTAL_DIRECTORY_SIZE > 1024") -ne 0 ]; then
+    case "$TOTAL_DIRECTORY_SIZE_UNITS" in
+    'KB')
+    TOTAL_DIRECTORY_SIZE="$(echo "scale=1;$TOTAL_DIRECTORY_SIZE / 1024" | bc -l)"
+    TOTAL_DIRECTORY_SIZE_UNITS="MB"
+    ;;
+    'MB')
+    TOTAL_DIRECTORY_SIZE="$(echo "scale=2;$TOTAL_DIRECTORY_SIZE / 1024" | bc -l)"
+    TOTAL_DIRECTORY_SIZE_UNITS="GB"
+    ;;
+    esac
+  fi
+
+  TOTAL_DIRECTORY_SIZE="$(echo "scale=2;$TOTAL_DIRECTORY_SIZE / 1" | bc -l)"
   echo -e "$TOTAL_DIRECTORY_SIZE$TOTAL_DIRECTORY_SIZE_UNITS, $TOTAL_FILE_COUNT files"
 
   # TODO: Save combined results to .csv file
-  touch "${DIRECTORY_PATH}/combined-disk-usage.csv"; printf '%s, %s\n' "total file count" "total size" > "${DIRECTORY_PATH}/combined-disk-usage.csv"; printf '%s, %s\n' "$TOTAL_FILE_COUNT" "$TOTAL_DIRECTORY_SIZE$TOTAL_DIRECTORY_SIZE_UNITS" >> "${DIRECTORY_PATH}/combined-disk-usage.csv"
+  touch "${DIRECTORY_PATH}/combined-disk-usage.csv"; printf '%s, %s, %s\n' "Directory" "Files" "Size" > "${DIRECTORY_PATH}/combined-disk-usage.csv"; printf '%s, %s, %s\n' "TOTAL" "$TOTAL_FILE_COUNT" "$TOTAL_DIRECTORY_SIZE$TOTAL_DIRECTORY_SIZE_UNITS" >> "${DIRECTORY_PATH}/combined-disk-usage.csv"
 fi
 
 if [[ $sflags == *["g"]* ]]; then
