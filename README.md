@@ -1,6 +1,6 @@
 # scripts
 
-Home of scripts that may or may not be useful in web development activities. These are often scripts that I have written for fairly specific use cases, but may be useful to others in a general sense.
+Home of bash/node scripts that may or may not be useful in web development activities. These are often scripts that I have written for fairly specific use cases, but may be useful to others in a general sense.
 
 ## free-disk-space.sh
 
@@ -31,3 +31,13 @@ Set of commands to for a specified set of GitHub repositories, which allow for u
 **To-Do:**
 
 - Optionally update npm/bower depencencies
+
+## pr-summary.js
+
+Automated script that retrieves a list of all open pull requests for a defined set of repositories. *Note: Requires ~/.netrc file to be present and valid.*
+
+**To-Do:**
+
+- Add parameter to exclude assinged PR's
+- Add parameter to specify newest or oldest PR's first
+- Incorporate promises for GET requests, so we know when we're done, and can then sort/group as desired
