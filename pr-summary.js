@@ -143,16 +143,19 @@ function addToListFunction (repo, pr) {
     // Note assigned PR's
     var assignee = (pr.assignee)? " assigned to: " + pr.assignee.login : "";
 
+    pr.created_at = new Date(pr.created_at);
+    pr.formattedDate = pr.created_at.getFullYear() + "-" + (pr.created_at.getMonth() + 1) +  "-" + pr.created_at.getDate() + " " + pr.created_at.toTimeString().substr(0, 8);
+
     prs[repo].push({
       url: pr.html_url,
       title: pr.title,
       user: pr.user.login,
-      date: new Date(pr.created_at)
+      date: pr.created_at,
+      formattedDate: pr.formattedDate
     });
 
-    pr.created_at = pr.created_at.replace(/[TZ]/g, " ")
     // JUST PRINT EVERYTHING OUT AS YOU GET IT, SO YOU DON'T HAVE TO WORRY ABOUT PROMISES
     // TODO: Instrument promise format to allow for global sorting/grouping.
-    console.log(pr.created_at + "\t" + pr.user.login + " submitted: '" + pr.title + "' " + pr.html_url + assignee);
+    console.log(pr.formattedDate + "\t" + pr.user.login + " submitted: '" + pr.title + "' " + pr.html_url + assignee);
   }
 }
