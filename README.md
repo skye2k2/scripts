@@ -41,3 +41,7 @@ Automated script that retrieves a list of all open pull requests for a defined s
 - Add parameter to exclude assinged PR's
 - Add parameter to specify newest or oldest PR's first
 - Incorporate promises for GET requests, so we know when we're done, and can then sort/group as desired
+
+## ChangeDesktopBackground.workflow
+
+Applescript service to change all desktop backgrounds. Download, unzip, and add to /Library/Services/. Then open System Preferences-->Keyboard-->Shortcuts. Click on Services in the laft panel, scroll all the way down in the right panel to the General section, enable ChangeDesktopBackground.workflow, and add a keyboard shortcut.
