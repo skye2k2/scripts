@@ -258,6 +258,7 @@ done
 # Sort branch owners by name, date
 if [[ $sflags == *["b"]* ]]; then
   sort ${DIRECTORY_PATH}/branch-report.csv -o ${DIRECTORY_PATH}/branch-report.csv
+  cat ${DIRECTORY_PATH}/branch-report.csv
 fi
 
 if [[ $sflags == *["s"]* ]]; then
