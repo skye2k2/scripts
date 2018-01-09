@@ -7,14 +7,15 @@ set -o pipefail
 # Author: Clif Bergmann (skye2k2)
 # Date: Dec 2016
 # Purpose: Update a specific set of repositories, and optionally npm/bower install, run tests, and open results on each.
-# Use: Download and place/link in your least common directory under which you wish GitHub repositories to be updated, set the execute bit `chmod +x gitmanage.sh`, modify the REPOSITORIES find parameters then run `./gitmanage.sh` with the parameters you choose.
+# Use: Download and place/link in your most common directory under which you wish GitHub repositories to be updated, set the execute bit `chmod +x gitmanage.sh`, modify the REPOSITORIES find parameters then run `./gitmanage.sh` with the parameters you choose.
 # --------------------------------------------------------------------------------
 
 # Source of parameter-handling code: http://www.freebsd.org/cgi/man.cgi?query=getopt
-args=`getopt cdfghstu $*`
+args=`getopt bcdfghstu $*`
 
 if [ $? -ne 0 ]; then
   echo -e "options:
+  -b: branches: return a list of all repository branches by owner.
   -c: check: just return what directories *would* have been updated. Supercedes all other flags
   -d: dependencies: update the package dependencies
   -f: full: remove node_modules, npm link, cake env:setup
@@ -31,12 +32,13 @@ set -- $args
 while true; do
   case "$1" in
     # TODO: Make specific cases to set boolean flags for each option
-    -c|-d|-f|-g|-s|-t|-u)
+    -b|-c|-d|-f|-g|-s|-t|-u)
       sflags="${1#-}$sflags"
       shift
     ;;
     -h)
       echo -e "options:
+      -b: branches: return a list of all repository branches by owner.
       -c: check: just return what directories *would* have been updated. Supercedes all other flags
       -d: dependencies: update the package dependencies
       -f: full: remove node_modules/bower_components, npm link, cake env:setup
@@ -63,7 +65,15 @@ TOTAL_DIRECTORY_SIZE_UNITS="MB"
 # function runCommands determines which commands to run, based on passed-in arguments, presence of specific files, and previous Git command results
 # @param string $1 - Path to Git command logfile. Will contain any errors Git encountered
 # @param string $2 - Path to repository. Used to check for existance of files that determine how assets are installed and tested
+# @param string $3 - Repository folder (which should also be the repository name).
 function runCommands {
+  # If branches flag (-b) enabled, run git  branch checker command, replace "origin" with repo name
+  if [[ $sflags == *["b"]* ]]; then
+    BRANCHES="$(git for-each-ref --format='%(authorname) %09 %(committerdate:short) %09 %(refname:short)' --sort authorname | grep origin | grep -Ev 'origin/HEAD|origin/master')"
+    BRANCHES=${BRANCHES//"origin"/${3}}
+    echo -e "$BRANCHES" >> ${DIRECTORY_PATH}/branch-report.csv
+  fi
+
   # If git-fame flag (-g) enabled, run git fame (https://github.com/oleander/git-fame-rb) and save report to /reports/git-fame.csv
   # NOTE: git fame is not multi-threaded (see: https://github.com/oleander/git-fame-rb/issues/75), so running against repositories with over 300 files to parse will take a while
   # Piping through sed is to remove any quotes and thousands commas reulting from pretty printing (see: https://github.com/oleander/git-fame-rb/issues/76)
@@ -120,10 +130,11 @@ function runCommands {
 
   # If size flag (-s) enabled, calculate the directory size and number of files
   if [[ $sflags == *["s"]* ]]; then
-    # TODO: PROBABLY SHOULD EXCLUDE THE .git DIRECTORY
+    # TODO: PROBABLY SHOULD EXCLUDE THE .git DIRECTORY, WHICH ADDS A FEW HUNDRED EXTRA FILES
     DIRECTORY_SIZE="`du -sh`" # $PWD
     DIRECTORY_SIZE="$(echo ${DIRECTORY_SIZE%?.*} | tr -d '[:space:]')" # remove whitespace and trailing dot
 
+    # TODO: PROBABLY SHOULD EXCLUDE THE .git DIRECTORY, WHICH ADDS A FEW HUNDRED EXTRA FILES
     FILE_COUNT="`find $PWD -print | wc -l | tr -d '[:space:]'`" # remove whitespace
 
     echo -e " $DIRECTORY_SIZE, $FILE_COUNT files"
@@ -195,6 +206,10 @@ if [ "${#REPOSITORIES[@]}" -gt 1 ]; then
   echo -e "${#REPOSITORIES[@]} repositories:\n"
 fi
 
+if [[ $sflags == *["b"]* ]]; then
+  > "${DIRECTORY_PATH}/branch-report.csv"
+fi
+
 # For each repository, run additional selected commands
 for REPO_PATH in "${REPOSITORIES[@]}"; do
   REPO_NAME="${REPO_PATH##*/}"
@@ -223,7 +238,7 @@ for REPO_PATH in "${REPOSITORIES[@]}"; do
         echo -e "...changes stashed"
         git checkout master
         (git pull --rebase --all 2>&1) > ${LOGFILE}
-        runCommands $LOGFILE $REPO_PATH
+        runCommands $LOGFILE $REPO_PATH $REPO_NAME
       else
         echo -e "ERROR: Failed to stash changes. Check the log at: ${LOGFILE} for more detail"
       fi
@@ -232,13 +247,18 @@ for REPO_PATH in "${REPOSITORIES[@]}"; do
       # DETERMINE HOW IN THE HECK TO USE .netrc CORRECTLY TO ACCESS THE GITHUB API FOR EACH DEPENDENCY TO COMPARE THE MOST RECENT RELEASE FOR THE CURRENT REPO WITH THE CURRENT PINNED VERSION AND THEN UPDATE
       # POTENTIALLY CHECK TO SEE IF THE NEW TAG IS A NUMBER OF POSITIVE COMMITS AHEAD OF THE CURRENT PIN
       # curl -netrc-file ~/.netrc https://api.github.com/repos/fs-webdev/fs-cache/tags
-      runCommands $LOGFILE $REPO_PATH
+      runCommands $LOGFILE $REPO_PATH $REPO_NAME
     fi
   else
     echo -e "Processing $REPO_NAME"
-    runCommands $LOGFILE $REPO_PATH
+    runCommands $LOGFILE $REPO_PATH $REPO_NAME
   fi
 done
+
+# Sort branch owners by name, date
+if [[ $sflags == *["b"]* ]]; then
+  sort ${DIRECTORY_PATH}/branch-report.csv -o ${DIRECTORY_PATH}/branch-report.csv
+fi
 
 if [[ $sflags == *["s"]* ]]; then
   echo -e "\nFILESYSTEM SUMMARY:\n"
@@ -276,6 +296,6 @@ if [[ $sflags == *["g"]* ]]; then
   cat "${DIRECTORY_PATH}/combined-git-fame.csv"
 fi
 
-say "Job done!" &
+# say "Job done!" &
 
 #bash
