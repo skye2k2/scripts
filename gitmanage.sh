@@ -21,6 +21,7 @@ if [ $? -ne 0 ]; then
   -f: full: remove node_modules, npm link, cake env:setup
   -g: git-fame: generate git-fame report (depends on https://github.com/oleander/git-fame-rb)
   -h: show this help menu
+  -r: run command(s) specified in the CUSTOM_EXECUTION_BLOCK section of this script
   -s: size: calculate npm- and bower-installed repository size
   -t: test: run unit tests and open results (stored in /reports)
   -u: update: update git repository"
@@ -32,7 +33,7 @@ set -- $args
 while true; do
   case "$1" in
     # TODO: Make specific cases to set boolean flags for each option
-    -b|-c|-d|-f|-g|-s|-t|-u)
+    -b|-c|-d|-f|-g|-r|-s|-t|-u)
       sflags="${1#-}$sflags"
       shift
     ;;
@@ -43,6 +44,7 @@ while true; do
       -d: dependencies: update the package dependencies
       -f: full: remove node_modules/bower_components, npm link, cake env:setup
       -g: git-fame: generate git-fame report (depends on https://github.com/oleander/git-fame-rb)
+      -r: run command(s) specified in the CUSTOM_EXECUTION_BLOCK section of this script
       -s: size: calculate npm- and bower-installed repository size
       -t: test: run unit tests and open results (stored in /reports)
       -u: update: update git repository"
@@ -128,6 +130,16 @@ function runCommands {
     fi
   fi
 
+  # If run flag (-r) enabled, run the commands specified below
+  if [[ $sflags == *["r"]* ]]; then
+    echo -e "Running commands for $REPO_NAME"
+    # BEGIN CUSTOM_EXECUTION_BLOCK
+    git add .
+    git commit -m "Update tree-common-build-scripts for version consistency"
+    git push
+    # END CUSTOM_EXECUTION_BLOCK
+  fi
+
   # If size flag (-s) enabled, calculate the directory size and number of files
   if [[ $sflags == *["s"]* ]]; then
     # TODO: PROBABLY SHOULD EXCLUDE THE .git DIRECTORY, WHICH ADDS A FEW HUNDRED EXTRA FILES
@@ -192,7 +204,7 @@ function runCommands {
 REPOSITORIES=()
 while IFS= read -d $'\0' -r REPO_PATH; do
    REPOSITORIES=("${REPOSITORIES[@]}" "$REPO_PATH")
-done < <(find $DIRECTORY_PATH/downstream/ -type d -maxdepth 1 -mindepth 0 -print0)
+done < <(find $DIRECTORY_PATH/fs-components -type d -maxdepth 1 -mindepth 0 -print0)
 
 for i in "${!REPOSITORIES[@]}"; do
 # Make sure a directory is a GitHub directory before updating
@@ -225,10 +237,10 @@ for REPO_PATH in "${REPOSITORIES[@]}"; do
 
   if [[ $sflags == *["u"]* ]]; then
     echo -e "Updating $REPO_NAME"
-
     # Update repository, stashing if needed
     (git prune 2>&1) | tee ${LOGFILE}
-    (git pull --quiet --rebase --all 2>&1) > ${LOGFILE}
+    (git pull --all --autostash --quiet --rebase --recurse-submodules 2>&1) > ${LOGFILE}
+    (git submodule update --remote --recursive --quiet) > ${LOGFILE}
 
     if grep -xqF "error: Cannot pull with rebase: You have unstaged changes." ${LOGFILE}; then
       echo -e "...uncommitted changes detected--stashing"
