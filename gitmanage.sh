@@ -11,7 +11,7 @@ set -o pipefail
 # --------------------------------------------------------------------------------
 
 # Source of parameter-handling code: http://www.freebsd.org/cgi/man.cgi?query=getopt
-args=`getopt bcdfghstu $*`
+args=`getopt bcdfghrstu $*`
 
 if [ $? -ne 0 ]; then
   echo -e "options:
@@ -134,9 +134,13 @@ function runCommands {
   if [[ $sflags == *["r"]* ]]; then
     echo -e "Running commands for $REPO_NAME"
     # BEGIN CUSTOM_EXECUTION_BLOCK
-    git add .
-    git commit -m "Update tree-common-build-scripts for version consistency"
-    git push
+    git submodule deinit tree-common-build-scripts
+    git rm --cached tree-common-build-scripts
+    rm -rf .git/modules/tree-common-build-scripts
+    rm .gitmodules
+    rm -Rf tree-common-build-scripts
+    # git add .
+    # git commit -m "Remove submodule and move to single common package dependency" --no-verify
     # END CUSTOM_EXECUTION_BLOCK
   fi
 
