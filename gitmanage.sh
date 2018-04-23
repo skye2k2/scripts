@@ -116,6 +116,7 @@ function runCommands {
   if [[ $sflags == *["f"]* ]]; then
     if [ -s "${2}/package.json" ]; then
       rm -rf "${2}/node_modules"
+      npm install
       npm link -q
     fi
 
@@ -129,6 +130,7 @@ function runCommands {
 
     if [ -s "${2}/Cakefile" ]; then
       cake env:setup
+      gulp env --env int
     fi
   fi
 
