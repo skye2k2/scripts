@@ -187,7 +187,7 @@ function runCommands {
       npm test
 
       # open coverage results pages (move below both if blocks once coverage is integrated into the web component repositories)
-      open -a /Applications/Google\ Chrome.app reports/coverage/client/html/index.html
+      open -a /Applications/Google\ Chrome.app reports/coverage/lcov-report/index.html
     else
       if [ -s "${2}/bower.json" ]; then
         wct --skip-plugin sauce
