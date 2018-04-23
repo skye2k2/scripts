@@ -11,7 +11,7 @@ set -o pipefail
 # --------------------------------------------------------------------------------
 
 # Source of parameter-handling code: http://www.freebsd.org/cgi/man.cgi?query=getopt
-args=`getopt bcdfghrstu $*`
+args=`getopt bcdfghirstu $*`
 
 if [ $? -ne 0 ]; then
   echo -e "options:
@@ -21,6 +21,7 @@ if [ $? -ne 0 ]; then
   -f: full: remove node_modules, npm link, cake env:setup
   -g: git-fame: generate git-fame report (depends on https://github.com/oleander/git-fame-rb)
   -h: show this help menu
+  -i: init: DESTRUCTIVE ACTION: run an initial clone of all (most of) Tree shared components and apps
   -r: run command(s) specified in the CUSTOM_EXECUTION_BLOCK section of this script
   -s: size: calculate npm- and bower-installed repository size
   -t: test: run unit tests and open results (stored in /reports)
@@ -33,7 +34,7 @@ set -- $args
 while true; do
   case "$1" in
     # TODO: Make specific cases to set boolean flags for each option
-    -b|-c|-d|-f|-g|-r|-s|-t|-u)
+    -b|-c|-d|-f|-g|-i|-r|-s|-t|-u)
       sflags="${1#-}$sflags"
       shift
     ;;
@@ -44,6 +45,7 @@ while true; do
       -d: dependencies: update the package dependencies
       -f: full: remove node_modules/bower_components, npm link, cake env:setup
       -g: git-fame: generate git-fame report (depends on https://github.com/oleander/git-fame-rb)
+      -i: init: DESTRUCTIVE ACTION: run an initial clone of all (most of) Tree shared components and apps
       -r: run command(s) specified in the CUSTOM_EXECUTION_BLOCK section of this script
       -s: size: calculate npm- and bower-installed repository size
       -t: test: run unit tests and open results (stored in /reports)
@@ -202,13 +204,90 @@ function runCommands {
   fi
 }
 
+if [[ $sflags == *["i"]* ]]; then
+  echo -e "Initializing GitHub for Tree developers--ensure that you are a member of both fs-eng and fs-webdev GitHub organizations\nThis is a destructive command! It will delete any existing data in the target directories!\n"
+  # REPOSITORY_INIT_LIST (prefix applications with APP/, so they end up in their own folder)
+  REPOS_STRING="APP/fs-eng/frontier-tree
+APP/fs-eng/temple
+APP/fs-eng/temple-admin
+APP/fs-eng/tree-lite
+APP/fs-webdev/first-run
+APP/fs-webdev/tree
+fs-eng/fanchart
+fs-eng/GeoIP-Country-Lists
+fs-eng/ng-shared-components
+fs-eng/tree-descendancy
+fs-eng/tree-pedigree
+fs-eng/tree-port-pedigree
+fs-webdev/fs-add-person
+fs-webdev/fs-cache
+fs-webdev/fs-change-summary
+fs-webdev/fs-common-build-scripts
+fs-webdev/fs-couple-renderer
+fs-webdev/fs-demo
+fs-webdev/fs-dialog
+fs-webdev/fs-family-members
+fs-webdev/fs-indicators
+fs-webdev/fs-labelled-link
+fs-webdev/fs-life-events
+fs-webdev/fs-modules
+fs-webdev/fs-person
+fs-webdev/fs-person-card
+fs-webdev/fs-person-data-service
+fs-webdev/fs-person-page
+fs-webdev/fs-person-summary-extended
+fs-webdev/fs-person-timeline
+fs-webdev/fs-temple
+fs-webdev/fs-tree-conclusion
+fs-webdev/fs-tree-person-renderer
+fs-webdev/fs-tree-recents
+fs-webdev/fs-user-service
+fs-webdev/fs-watch
+fs-webdev/pr-police
+fs-webdev/styles-wc
+fs-webdev/tree-data-handler"
+
+  # Change IFS to newline temporarily
+  IFS=$'\n' names=($names)
+  REPOSITORIES=($REPOS_STRING)
+
+  # FRAGILE BIT: If you add additional organizations, make sure to add them to the folder manipulation section here
+  echo -e "Resetting target directories: /apps, /fs-eng, /fs-webdev"
+  rm -Rf ${DIRECTORY_PATH}/apps
+  mkdir ${DIRECTORY_PATH}/apps
+  rm -Rf ${DIRECTORY_PATH}/fs-eng
+  mkdir ${DIRECTORY_PATH}/fs-eng
+  rm -Rf ${DIRECTORY_PATH}/fs-webdev
+  mkdir ${DIRECTORY_PATH}/fs-webdev
+
+  # Clone each Tree repository
+  for i in "${!REPOSITORIES[@]}"; do
+    CURRENT_DIR="$(basename "$DIRECTORY_PATH")"
+    # Strip off the APP/ designator for application-level repositories
+    if [[ ${REPOSITORIES[$i]} =~ .*APP/.* ]]; then
+      REPOSITORIES[$i]=${REPOSITORIES[$i]:4}
+      cd ${DIRECTORY_PATH}/apps
+    else
+      ORGANIZATION_NAME=${REPOSITORIES[$i]%%/*}
+      cd ${DIRECTORY_PATH}/${ORGANIZATION_NAME}
+    fi
+
+    REPO_NAME=${REPOSITORIES[$i]##*/}
+    echo -e "\n${REPO_NAME}"
+    git clone https://github.com/${REPOSITORIES[$i]}.git
+  done
+
+  exit 0
+else
+  REPOSITORIES=()
+fi
+
 # http://stackoverflow.com/questions/8213328/bash-script-find-output-to-array
-# Insert your own repository sub-folders into the multi-find statement below; ex: find $DIRECTORY_PATH/fs-components $DIRECTORY_PATH/downstream
+# Insert your own repository sub-folders into the multi-find statement below; ex: find $DIRECTORY_PATH/fs-webdev $DIRECTORY_PATH/fs-eng
 # Modify the max- and min-depth as desired; mindepth 0 includes the passed-in directory as a potential repo; maxdepth 2 will search two directories deep for potential repos
-REPOSITORIES=()
 while IFS= read -d $'\0' -r REPO_PATH; do
    REPOSITORIES=("${REPOSITORIES[@]}" "$REPO_PATH")
-done < <(find $DIRECTORY_PATH/fs-components -type d -maxdepth 1 -mindepth 0 -print0)
+done < <(find $DIRECTORY_PATH/fs-webdev $DIRECTORY_PATH/fs-eng -type d -maxdepth 1 -mindepth 0 -print0)
 
 for i in "${!REPOSITORIES[@]}"; do
 # Make sure a directory is a GitHub directory before updating

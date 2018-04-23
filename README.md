@@ -21,12 +21,14 @@ Set of commands to for a specified set of GitHub repositories, which allow for u
 
 ### Options:
 
-    -c	  check     Output the list of GitHub directories that *would* have been updated. Supercedes all other flags.
-    -d    deps      Update the package dependencies (IN-PROGRESS)
-    -f    full    	Do a full install. Remove node_modules/bower_components/components and then install based on the package lists present; run `cake env:setup` if Cakefile is present.
-    -g    git-fame  Generate git-fame report (depends on https://github.com/oleander/git-fame-rb)
-    -t	  test		Run unit tests via `npm test` or `wct --skip-plugin sauce`, determined by presence of package.json/bower.json. Open coverage results.
-    -u    update  	Update repository, stashing changes, if needed.
+    -c `check`: Output the list of GitHub directories that *would* have been updated. Supercedes all other flags.
+    -d `deps` Update the package dependencies (INCOMPLETE).
+    -f `full`: Do a full install. Remove node_modules/bower_components/components and then install based on the package lists present; run `cake env:setup` if Cakefile is present.
+    -g `git-fame`: Generate git-fame report (depends on https://github.com/oleander/git-fame-rb).
+    -i `init`: DESTRUCTIVE ACTION: Completely reinitialize the directory with the set of repositories noted at `REPOSITORY_INIT_LIST` section.
+    -r `run`: Run a set of commands defined in the `CUSTOM_EXECUTION_BLOCK` section.
+    -t `test`: Run unit tests via `npm test` or `wct --skip-plugin sauce`, determined by presence of package.json/bower.json. Open coverage results.
+    -u `update`: Update repository, stashing changes, if needed.
 
 **To-Do:**
 
