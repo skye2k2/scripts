@@ -4,42 +4,17 @@
 Script: pr-summary.js
 Author: Clif Bergmann (skye2k2)
 Date: May 2017
-Purpose: Retrieve a list of all open pull requests for a set of repositories.
-Use: Download and set the execute bit `chmod +x pr-summary.js`, modify the REPOSITORIES array to contain the repos you want to check, then run `./pr-summary.js`. Utilizes GitHub API and plaintext credentials from the user's .netrc file.
+Purpose: Retrieve a list of all open pull requests for a set of repositories for given organizations with a given topic.
+Use: Download and set the execute bit `chmod +x pr-summary.js`, modify the TOPIC variable to be the topic desired and the ORGS variable to contain the organizations to search (that you have access to), then run `./pr-summary.js`. Utilizes GitHub API and plaintext credentials from the user's .netrc file.
 -------------------------------------------------------------------------------- */
-
-// Array of repositories to check for PR's in. Format: "org/repo"
-var REPOSITORIES = [
-  "fs-webdev/component-catalog",
-  "fs-webdev/polymer-element-catalog",
-  "fs-webdev/core-elements",
-  "fs-webdev/tree-service-elements",
-  "fs-webdev/ui-elements",
-  "fs-webdev/dialog-el",
-  "fs-webdev/fs-add-person",
-  "fs-webdev/fs-cache",
-  "fs-webdev/fs-couple-renderer",
-  "fs-webdev/fs-demo",
-  "fs-webdev/fs-indicators",
-  "fs-webdev/fs-indicators-flyout",
-  "fs-webdev/fs-labelled-link",
-  "fs-webdev/fs-life-events",
-  "fs-webdev/fs-person-card",
-  "fs-webdev/fs-person-card-service",
-  "fs-webdev/fs-person-data-service",
-  "fs-webdev/fs-person-summary-extended",
-  "fs-webdev/fs-tree-person-renderer",
-  "fs-webdev/fs-user-service",
-  "fs-webdev/fs-watch",
-  "fs-webdev/styles-wc",
-  "fs-webdev/wc-i18n",
-  "fs-webdev/tree"
-];
+var TOPIC = 'tw-gold';
+var ORGS = 'org:fs-webdev+org:fs-eng';
 
 var https = require("https");
 var fs = require("fs");
 var prs = [];
 var credentials = {};
+var repositories = [];
 
 // Read GitHub credentials from user's .netrc file
 fs.readFile(process.env.HOME + "/.netrc", "utf8", function (err, data) {
@@ -85,17 +60,54 @@ fs.readFile(process.env.HOME + "/.netrc", "utf8", function (err, data) {
 
   credentials = machines["raw.github.com"];
 
-  REPOSITORIES.forEach(function (repo) {
-    fetchPRs(repo, addToList);
-  });
+  fetchRepos();
 });
+
+// Check orgs for repos with matching topic
+function fetchRepos () {
+  https.get({
+    auth: credentials.login + ":" + credentials.password,
+    headers: {'User-Agent': credentials.login},
+    host: 'api.github.com',
+    path: '/search/repositories\?q\=fork:true+' + ORGS + '+topic:' + TOPIC,
+    port: '443'
+  }, (res) => {
+    // explicitly treat incoming data as utf8 (avoids issues with multi-byte chars)
+    res.setEncoding('utf8');
+
+    var data = '';
+
+    res.on('data', (chunk) => {
+      data += chunk;
+    });
+
+    res.on('end', () => {
+      data = JSON.parse(data);
+
+      if (!data.items || !data.items.length) {
+        console.warn("No repositories found matching the topic: ", TOPIC);
+      }
+
+      data.items.forEach((repo) => {
+        repositories.push(repo.full_name);
+        repositories.sort();
+      });
+
+      // console.log(repositories);
+
+      repositories.forEach(function (repo) {
+        fetchPRs(repo, addToList);
+      });
+    });
+  });
+}
 
 // Check a given repository for outstanding pull requests
 function fetchPRs (repo, cb) {
   https.get({
     auth: credentials.login + ":" + credentials.password,
     headers: {
-      "User-Agent": "skye2k2"
+      "User-Agent": credentials.login
     },
     host: "api.github.com",
     path: "/repos/" + repo + "/pulls?state=open&sort=created&direction=asc"
@@ -104,14 +116,14 @@ function fetchPRs (repo, cb) {
     res.setEncoding('utf8');
 
     // incrementally capture the incoming response body
-    var body = '';
+    var data = '';
     res.on('data', function(d) {
-        body += d;
+        data += d;
     });
 
     res.on('end', function() {
       try {
-        var parsed = JSON.parse(body);
+        var parsed = JSON.parse(data);
       } catch (err) {
         console.error(res.headers);
         console.error('Unable to parse response as JSON');
