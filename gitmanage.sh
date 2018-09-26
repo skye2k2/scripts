@@ -208,46 +208,8 @@ function runCommands {
 
 if [[ $sflags == *["i"]* ]]; then
   echo -e "Initializing GitHub for Tree developers--ensure that you are a member of both fs-eng and fs-webdev GitHub organizations\nThis is a destructive command! It will delete any existing data in the target directories!\n"
-  # REPOSITORY_INIT_LIST (prefix applications with APP/, so they end up in their own folder)
-  REPOS_STRING="APP/fs-eng/frontier-tree
-APP/fs-eng/temple
-APP/fs-eng/temple-admin
-APP/fs-eng/tree-lite
-APP/fs-webdev/first-run
-APP/fs-webdev/tree
-fs-eng/fanchart
-fs-eng/GeoIP-Country-Lists
-fs-eng/ng-shared-components
-fs-eng/tree-descendancy
-fs-eng/tree-pedigree
-fs-eng/tree-port-pedigree
-fs-webdev/fs-add-person
-fs-webdev/fs-cache
-fs-webdev/fs-change-summary
-fs-webdev/fs-common-build-scripts
-fs-webdev/fs-couple-renderer
-fs-webdev/fs-demo
-fs-webdev/fs-dialog
-fs-webdev/fs-family-members
-fs-webdev/fs-indicators
-fs-webdev/fs-labelled-link
-fs-webdev/fs-life-events
-fs-webdev/fs-modules
-fs-webdev/fs-person
-fs-webdev/fs-person-card
-fs-webdev/fs-person-data-service
-fs-webdev/fs-person-page
-fs-webdev/fs-person-summary-extended
-fs-webdev/fs-person-timeline
-fs-webdev/fs-temple
-fs-webdev/fs-tree-conclusion
-fs-webdev/fs-tree-person-renderer
-fs-webdev/fs-tree-recents
-fs-webdev/fs-user-service
-fs-webdev/fs-watch
-fs-webdev/pr-police
-fs-webdev/styles-wc
-fs-webdev/tree-data-handler"
+  # REPOSITORY_INIT_LIST Format: org/repo_name (prefix applications with APP/, so they end up in their own folder)
+  REPOS_STRING=""
 
   # Change IFS to newline temporarily
   IFS=$'\n' names=($names)
