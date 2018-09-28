@@ -17,7 +17,7 @@ async function get (ORGS = 'org:fs-webdev+org:fs-eng', TOPIC = 'tw-gold') {
   try {
     // fetchLatestReleaseLocal = fetchLatestRelease;
     this.credentials = await fetchCredentials.get();
-    this.repos = await fetchRepos.get();
+    this.repos = await fetchRepos.get(ORGS, TOPIC);
     this.repos.forEach(async (repo) => {
       var release = await fetchLatestRelease(repo);
       await fetchCommitsSinceLastRelease(repo, release.tag_name, release.published_at);
